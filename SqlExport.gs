@@ -85,7 +85,7 @@ addObject: anObject
 	objectTableFile
 		nextPutAll: 'o_';
 		nextPutAll: anObject asOop printString;
-		nextPutAll: '	';
+		nextPut: Character tab;
 		nextPutAll: anObject class name;
 		cr.
 
@@ -115,8 +115,8 @@ exportDictionaryElements: anObject
 	self try: [
 		file := self openAppend: path, '/',anObject class name,'_elements.txt' withHeader: [ :f |
 			f 
-				nextPutAll: 'OOP	';
-				nextPutAll: 'key	';
+				nextPutAll: 'OOP'; nextPut: Character tab;
+				nextPutAll: 'key'; nextPut: Character tab;
 				nextPutAll: 'value';
 				cr.
 		].
@@ -129,9 +129,9 @@ exportDictionaryElements: anObject
 			file 
 				nextPutAll: 'o_';
 				nextPutAll: anObject asOop printString; 
-				nextPutAll: '	'.
+				nextPut: Character tab.
 			self exportObject: eachKey to: file.
-			file nextPutAll: '	'.
+			file nextPut: Character tab.
 			eachValue == token ifTrue: [
 				file nextPutAll: '-1'
 			] ifFalse: [
@@ -173,7 +173,7 @@ exportObject: anObject to: aGsFile
 		^self
 	].
 
-	aGsFile nextPutAll: '	'.
+	aGsFile nextPut: Character tab.
 
 	(anObject isKindOf: Integer) ifTrue: [
 		anObject printOn: aGsFile.
@@ -208,10 +208,10 @@ exportRemainder: anObject
 		file := self openAppend: path, '/', anObject class name,'.txt' withHeader: [ :f |
 			f nextPutAll: 'OOP'.
 			anObject class allInstVarNames do: [ :eachName |
-				f nextPutAll: '	'; nextPutAll: eachName.
+				f nextPut: Character tab; nextPutAll: eachName.
 			].
 			anObject class isIndexable ifTrue: [
-				f nextPutAll: '	'; nextPutAll: '_size'.
+				f nextPut: Character tab; nextPutAll: '_size'.
 			].
 			f cr.
 		].
@@ -222,7 +222,7 @@ exportRemainder: anObject
 			self exportObject: (anObject instVarAt: i) to: file.
 		].
 		anObject class isIndexable ifTrue: [
-			file nextPutAll: '	'; nextPutAll: anObject size printString.
+			file nextPut: Character tab; nextPutAll: anObject size printString.
 		].
 		file cr.
 	] ensure: [file isNil ifFalse: [file close]].
@@ -244,9 +244,9 @@ exportSequenceableCollectionElements: anObject
 			file 
 				nextPutAll: 'o_';
 				nextPutAll: anObject asOop printString; 
-				nextPutAll: '	';
+				nextPut: Character tab;
 				nextPutAll: i printString;
-				nextPutAll: '	';
+				nextPut: Character tab;
 				yourself.
 			self exportObject: (anObject at: i) to: file.
 			file cr.
@@ -262,14 +262,14 @@ exportStrings: anObject
 		file := self openAppend: path, '/',anObject class name,'.txt' withHeader: [ :f |
 			f 
 				nextPutAll: 'OOP';
-				nextPutAll: '	';
+				nextPut: Character tab;
 				nextPutAll: 'Value';
 				cr.		
 		].
 		file
 			nextPutAll: 'o_'; 
 			nextPutAll: anObject asOop printString;
-			nextPutAll: '	';
+			nextPut: Character tab;
 			yourself.
 		
 		anObject do: [ :char |
@@ -336,7 +336,7 @@ initialize: aGlobal to: aPath with: aFileSystem
 				cr;
 				nextPutAll: 'o_';
 				nextPutAll: nil asOop printString;
-				nextPutAll: '	';
+				nextPut: Character tab;
 				nextPutAll: nil class name;
 				cr.
 		].
@@ -359,7 +359,7 @@ initialize: aPath with: aFileSystem
 				cr;
 				nextPutAll: 'o_';
 				nextPutAll: nil asOop printString;
-				nextPutAll: '	';
+				nextPut: Character tab;
 				nextPutAll: nil class name;
 				cr.
 		].
