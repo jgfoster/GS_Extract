@@ -65,9 +65,7 @@ exportTo: aPath gsFile: anObject
 	SqlExport exportTo: '/tmp/globals/'
 	"
 
-	^self basicNew
-		initialize: aPath with: anObject;
-		yourself
+	^self export: UserGlobals to: aPath gsFile: anObject
 %
 ! ------------------- Instance methods for SqlExport
 category: 'other'
@@ -90,7 +88,7 @@ addObject: anObject
 		cr.
 
 	(self exportObject: anObject) ifTrue: [
-
+		"answers true if we should iterate over named/numbered instance variables"
 		1 to: anObject _primitiveSize do: [ :i |
 			| obj |
 			[
@@ -144,6 +142,7 @@ exportDictionaryElements: anObject
 category: 'other'
 method: SqlExport
 exportObject: anObject
+	"answers true if we should iterate over named/numbered instance variables"
 
 	anObject isBehavior ifTrue: [ ^false ].
 	(anObject isKindOf: GsMethod) ifTrue: [ ^false ].
@@ -159,7 +158,7 @@ exportObject: anObject
 	(anObject class inheritsFrom: AbstractDictionary) ifTrue: [ 
 		self exportDictionaryElements: anObject.
 	].
-	
+
 	self exportRemainder: anObject.
 
 	^true
@@ -235,9 +234,9 @@ exportSequenceableCollectionElements: anObject
 	self try: [
 		file := self openAppend: path, '/',anObject class name,'_elements.txt' withHeader: [ :f |
 			f
-				nextPutAll: 'OOP	';
-				nextPutAll: 'index	';
-				nextPutAll: 'value';
+				nextPutAll: 'OOP'; nextPut: Character tab;
+				nextPutAll: 'index'; nextPut: Character tab;
+				nextPutAll: 'value'; 
 				cr.
 		].
 		1 to: anObject size do: [ :i |
@@ -264,7 +263,7 @@ exportStrings: anObject
 				nextPutAll: 'OOP';
 				nextPut: Character tab;
 				nextPutAll: 'Value';
-				cr.		
+				cr.
 		].
 		file
 			nextPutAll: 'o_'; 
@@ -322,7 +321,7 @@ haveSeen: anObject
 category: 'other'
 method: SqlExport
 initialize: aGlobal to: aPath with: aFileSystem
-	
+
 	System addAllToStoneLog: 'oopHighWaterMark = ', System _oopHighWaterMark printString.
 	counter := 0.
 	fileSystem := aFileSystem.
@@ -331,7 +330,7 @@ initialize: aGlobal to: aPath with: aFileSystem
 	visited := ByteArray new: 10000000.
 	objectTableFile := self openAppend: path, '/object_table.txt' withHeader: [ :f |
 			f 
-				nextPutAll: 'OOP	';
+				nextPutAll: 'OOP'; nextPut: Character tab;
 				nextPutAll: 'ClassName';
 				cr;
 				nextPutAll: 'o_';
@@ -342,28 +341,6 @@ initialize: aGlobal to: aPath with: aFileSystem
 		].
 	self addObject: aGlobal.
 	objectTableFile close.
-%
-category: 'other'
-method: SqlExport
-initialize: aPath with: aFileSystem
-	
-	fileSystem := aFileSystem.
-	path := aPath.
-	path last == $/ ifTrue: [ path := path copyFrom: 1 to: path size - 1 ].
-	visited := ByteArray new: 10000000.
-	objectTableFile := self openAppend: path, '/object_table.txt' withHeader: [ :f |
-			f 
-				nextPutAll: 'OOP	';
-				nextPutAll: 'Class Name';
-				cr;
-				nextPutAll: 'o_';
-				nextPutAll: nil asOop printString;
-				nextPut: Character tab;
-				nextPutAll: nil class name;
-				cr.
-		].
-	self addObject: UserGlobals.
-	"self exportObjectTable."
 %
 category: 'other'
 method: SqlExport
@@ -399,7 +376,7 @@ try: tryBlock ensure: ensureBlock
 		ensureBlock value.
 		^nil
 	].
-	
+
 	result := tryBlock value.
 	ensureBlock value.
 	^result
