@@ -27,9 +27,9 @@ category: 'other'
 classmethod: SqlExport
 export: aGlobal to: aPath
 
-"
-SqlExport export: UserGlobals to: '/tmp/globals/'
-"
+	"
+	SqlExport export: UserGlobals to: '/tmp/globals/'
+	"
 
 	^self export: aGlobal to: aPath gsFile: GsFile
 %
@@ -37,9 +37,9 @@ category: 'other'
 classmethod: SqlExport
 export: aGlobal to: aPath gsFile: anObject
 
-"
-SqlExport exportTo: '/tmp/globals/'
-"
+	"
+	SqlExport exportTo: '/tmp/globals/'
+	"
 
 	self basicNew
 		initialize: aGlobal to: aPath with: anObject;
@@ -51,9 +51,9 @@ category: 'other'
 classmethod: SqlExport
 exportTo: aPath
 
-"
-SqlExport exportTo: '/tmp/globals/'
-"
+	"
+	SqlExport exportTo: '/tmp/globals/'
+	"
 
 	^self export: UserGlobals to: aPath gsFile: GsFile
 %
@@ -61,9 +61,9 @@ category: 'other'
 classmethod: SqlExport
 exportTo: aPath gsFile: anObject
 
-"
-SqlExport exportTo: '/tmp/globals/'
-"
+	"
+	SqlExport exportTo: '/tmp/globals/'
+	"
 
 	^self basicNew
 		initialize: aPath with: anObject;
@@ -342,7 +342,6 @@ initialize: aGlobal to: aPath with: aFileSystem
 		].
 	self addObject: aGlobal.
 	objectTableFile close.
-	"self exportObjectTable."
 %
 category: 'other'
 method: SqlExport
