@@ -2,8 +2,8 @@
 expectvalue /Class
 doit
 Object subclass: 'SqlExport'
-  instVarNames: #( classes counter fileSystem objects
-                    objectTableFile path visited)
+  instVarNames: #( classes counter fileSystem methodClass
+                    objects objectTableFile path visited)
   classVars: #()
   classInstVars: #()
   poolDictionaries:	Array new
@@ -145,7 +145,7 @@ exportObject: anObject
 	"answers true if we should iterate over named/numbered instance variables"
 
 	anObject isBehavior ifTrue: [ ^false ].
-	(anObject isKindOf: GsMethod) ifTrue: [ ^false ].
+	(anObject isKindOf: methodClass) ifTrue: [ ^false ].
 	anObject isSpecial ifTrue: [ self error: 'Did not expect a special here' ].
 
 	(anObject class inheritsFrom: CharacterCollection) ifTrue: [
@@ -197,6 +197,19 @@ exportObject: anObject to: aGsFile
 
 	aGsFile nextPutAll: 'o_'.
 	anObject asOop printOn: aGsFile.
+	aGsFile nextPut: $:; nextPutAll: anObject class name.
+	((anObject isKindOf: Collection) and: [(anObject isKindOf: String) not]) ifTrue: [
+		| classNames comma |
+		classNames := IdentitySet new.
+		anObject do: [:each | classNames add: each class name].
+		comma := ''.
+		aGsFile nextPut: $(.
+		classNames do: [:each |
+			aGsFile nextPutAll: comma; nextPutAll: each.
+			comma := ','.
+		].
+		aGsFile nextPut: $).
+	].
 %
 category: 'other'
 method: SqlExport
@@ -299,15 +312,22 @@ category: 'other'
 method: SqlExport
 haveSeen: anObject
 
-	| bitIndex byteIndex flag oop |
+	| bitIndex byteIndex flag mod offset oop |
+	SmallInteger maximumValue == 16r1FFFFFFF ifTrue: [
+		mod := 4.
+		offset := 0.
+	] ifFalse: [
+		mod := 8.
+		offset := 1.
+	].
 	oop := anObject asOop.
-	oop \\ 4 == 1 ifFalse: [
+	oop \\ mod == 1 ifFalse: [
 		self error: 'We don''t understand oops'.
 	].
-	bitIndex := oop - 1 // 4.
+	bitIndex := oop - 1 // mod.
 	byteIndex := bitIndex // 8.
 	bitIndex := bitIndex \\ 8.
-	flag := (visited at: byteIndex) bitAt: bitIndex.
+	flag := (visited at: byteIndex) bitAt: bitIndex + offset.
 	flag == 1 ifTrue: [
 		^true
 	].
@@ -323,6 +343,9 @@ method: SqlExport
 initialize: aGlobal to: aPath with: aFileSystem
 
 	System addAllToStoneLog: 'oopHighWaterMark = ', System _oopHighWaterMark printString.
+	methodClass := (Globals includesKey: #'GsNMethod')
+		ifTrue: [Globals at: #'GsNMethod']
+		ifFalse: [Globals at: #'GsMethod'].
 	counter := 0.
 	fileSystem := aFileSystem.
 	path := aPath.

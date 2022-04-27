@@ -1,0 +1,10 @@
+errorCount
+output push SqlExport.out only
+errorCount
+input SqlExport.gs
+output pop
+errorCount
+run
+SqlExport exportTo: 'tmp'.
+%
+stk
