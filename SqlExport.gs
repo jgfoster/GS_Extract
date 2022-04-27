@@ -73,12 +73,17 @@ method: SqlExport
 addObject: anObject
 
 	[
-		Exception category: GemStoneError number: 2115 do: [ :ex :cat :num :args | ^self ].
-		anObject isSpecial ifTrue: [ ^self ].
-		anObject isBehavior ifTrue: [ ^self ].
+		Exception category: GemStoneError number: 2115 do: [:ex :cat :num :args | 
+			GsFile stdout nextPutAll: 'Object ignored due to security error'; cr.
+			^self 
+		].
+		anObject isSpecial ifTrue: [^self].
+		anObject isBehavior ifTrue: [^self].
+		(anObject isKindOf: methodClass) ifTrue: [^self].
+		(anObject isKindOf: AbstractCollisionBucket) ifTrue: [^self].
 	] value.
 	
-	(self haveSeen: anObject) ifTrue: [ ^self ].
+	(self haveSeen: anObject) ifTrue: [^self].
 
 	objectTableFile
 		nextPutAll: 'o_';
@@ -87,20 +92,7 @@ addObject: anObject
 		nextPutAll: anObject class name;
 		cr.
 
-	(self exportObject: anObject) ifTrue: [
-		"answers true if we should iterate over named/numbered instance variables"
-		1 to: anObject _primitiveSize do: [ :i |
-			| obj |
-			[
-				Exception category: GemStoneError number: 2110 do: [ :ex :cat :num :args |].
-				obj := anObject _primitiveAt: i.
-			] value.
-			self 
-				try: [self addObject: obj] 
-				on: Exception 
-				do: [:ex | ex return].
-		].
-	].
+	self exportObject: anObject.
 %
 category: 'other'
 method: SqlExport
@@ -111,19 +103,19 @@ exportDictionaryElements: anObject
 	token := Object new.
 
 	self try: [
-		file := self openAppend: path, '/',anObject class name,'_elements.txt' withHeader: [ :f |
+		file := self openAppend: path, '/',anObject class name,'_elements.txt' withHeader: [:f |
 			f 
 				nextPutAll: 'OOP'; nextPut: Character tab;
 				nextPutAll: 'key'; nextPut: Character tab;
 				nextPutAll: 'value';
 				cr.
 		].
-		anObject keys do: [ :eachKey |
+		anObject keys do: [:eachKey |
 			| eachValue |
 			eachValue := self 
-				try: [ anObject at: eachKey ] 
-				on: Exception 
-				do: [ :ex | ex return: token ].
+				from: anObject
+				at: eachKey
+				otherwise: token.
 			file 
 				nextPutAll: 'o_';
 				nextPutAll: anObject asOop printString; 
@@ -142,32 +134,26 @@ exportDictionaryElements: anObject
 category: 'other'
 method: SqlExport
 exportObject: anObject
-	"answers true if we should iterate over named/numbered instance variables"
-
-	anObject isBehavior ifTrue: [ ^false ].
-	(anObject isKindOf: methodClass) ifTrue: [ ^false ].
-	anObject isSpecial ifTrue: [ self error: 'Did not expect a special here' ].
 
 	(anObject class inheritsFrom: CharacterCollection) ifTrue: [
 		self exportStrings: anObject.
-		^false
+		^self
 	].
-	((anObject class inheritsFrom: SequenceableCollection) and: [(anObject class inheritsFrom: AbstractCollisionBucket) not]) ifTrue: [ 
+	(anObject class inheritsFrom: SequenceableCollection) ifTrue: [
 		self exportSequenceableCollectionElements: anObject.
 	].
-	(anObject class inheritsFrom: AbstractDictionary) ifTrue: [ 
+	(anObject class inheritsFrom: AbstractDictionary) ifTrue: [
 		self exportDictionaryElements: anObject.
 	].
 
 	self exportRemainder: anObject.
-
-	^true
 %
 category: 'other'
 method: SqlExport
 exportObject: anObject to: aGsFile
 
-	Exception category: GemStoneError number: 2115 do: [ :ex :cat :num :args |
+	Exception category: GemStoneError number: 2115 do: [:ex :cat :num :args |
+		"This happens only if there is an error in the code that follows."
 		aGsFile nextPutAll: 'hidden'.
 		^self
 	].
@@ -195,6 +181,7 @@ exportObject: anObject to: aGsFile
 		^self
 	].
 
+	objects add: anObject.
 	aGsFile nextPutAll: 'o_'.
 	anObject asOop printOn: aGsFile.
 	aGsFile nextPut: $:; nextPutAll: anObject class name.
@@ -217,9 +204,9 @@ exportRemainder: anObject
 	| file |
 	
 	self try: [
-		file := self openAppend: path, '/', anObject class name,'.txt' withHeader: [ :f |
+		file := self openAppend: path, '/', anObject class name,'.txt' withHeader: [:f |
 			f nextPutAll: 'OOP'.
-			anObject class allInstVarNames do: [ :eachName |
+			anObject class allInstVarNames do: [:eachName |
 				f nextPut: Character tab; nextPutAll: eachName.
 			].
 			anObject class isIndexable ifTrue: [
@@ -230,7 +217,7 @@ exportRemainder: anObject
 		file 
 			nextPutAll: 'o_';
 			nextPutAll: anObject asOop printString.
-		1 to: anObject class allInstVarNames size do: [ :i |
+		1 to: anObject class allInstVarNames size do: [:i |
 			self exportObject: (anObject instVarAt: i) to: file.
 		].
 		anObject class isIndexable ifTrue: [
@@ -245,14 +232,14 @@ exportSequenceableCollectionElements: anObject
 
 	| file |
 	self try: [
-		file := self openAppend: path, '/',anObject class name,'_elements.txt' withHeader: [ :f |
+		file := self openAppend: path, '/',anObject class name,'_elements.txt' withHeader: [:f |
 			f
 				nextPutAll: 'OOP'; nextPut: Character tab;
 				nextPutAll: 'index'; nextPut: Character tab;
 				nextPutAll: 'value'; 
 				cr.
 		].
-		1 to: anObject size do: [ :i |
+		1 to: anObject size do: [:i |
 			file 
 				nextPutAll: 'o_';
 				nextPutAll: anObject asOop printString; 
@@ -271,7 +258,7 @@ exportStrings: anObject
 
 	| file |
 	self try: [
-		file := self openAppend: path, '/',anObject class name,'.txt' withHeader: [ :f |
+		file := self openAppend: (path , '/' , anObject class name , '.txt') withHeader: [:f |
 			f 
 				nextPutAll: 'OOP';
 				nextPut: Character tab;
@@ -284,7 +271,7 @@ exportStrings: anObject
 			nextPut: Character tab;
 			yourself.
 		
-		anObject do: [ :char |
+		anObject do: [:char |
 			| val |
 			val := char asciiValue.
 			val = 92 ifTrue: [
@@ -293,7 +280,7 @@ exportStrings: anObject
 					nextPut: $\;
 					yourself.
 			] ifFalse: [
-				(val < 32 or: [ val > 126 ]) ifTrue: [
+				(val < 32 or: [val > 126]) ifTrue: [
 					file
 						nextPut: $\;
 						nextPutAll: val printString;
@@ -307,6 +294,15 @@ exportStrings: anObject
 		file cr.
 
 	] ensure: [file isNil ifFalse: [file close]].
+%
+category: 'other'
+method: SqlExport
+from: aDict at: aKey otherwise: anObject
+	Exception category: GemStoneError number: nil do: [:ex :cat :num :args | 
+		GsFile stdout nextPutAll: 'Error ' , num printString , ': OOP(' , aDict asOop printString , ') at: ' , aKey printString; cr.
+		^anObject
+	].
+	^aDict at: aKey
 %
 category: 'other'
 method: SqlExport
@@ -333,7 +329,7 @@ haveSeen: anObject
 	].
 	visited at: byteIndex put: ((visited at: byteIndex) bitOr: (1 bitShift: bitIndex)).
 	counter := counter + 1.
-	counter \\ 10000 == 0 ifTrue: [ 
+	counter \\ 10000 == 0 ifTrue: [
 		System addAllToStoneLog: 'Object count = ' , counter printString. 
 	].
 	^false
@@ -343,26 +339,24 @@ method: SqlExport
 initialize: aGlobal to: aPath with: aFileSystem
 
 	System addAllToStoneLog: 'oopHighWaterMark = ', System _oopHighWaterMark printString.
+	objects := OrderedCollection with: aGlobal.
 	methodClass := (Globals includesKey: #'GsNMethod')
 		ifTrue: [Globals at: #'GsNMethod']
 		ifFalse: [Globals at: #'GsMethod'].
 	counter := 0.
 	fileSystem := aFileSystem.
 	path := aPath.
-	path last == $/ ifTrue: [ path := path copyFrom: 1 to: path size - 1 ].
+	path last == $/ ifTrue: [path := path copyFrom: 1 to: path size - 1].
 	visited := ByteArray new: 10000000.
-	objectTableFile := self openAppend: path, '/object_table.txt' withHeader: [ :f |
+	objectTableFile := self openAppend: path, '/object_table.txt' withHeader: [:f |
 			f 
 				nextPutAll: 'OOP'; nextPut: Character tab;
 				nextPutAll: 'ClassName';
-				cr;
-				nextPutAll: 'o_';
-				nextPutAll: nil asOop printString;
-				nextPut: Character tab;
-				nextPutAll: nil class name;
 				cr.
 		].
-	self addObject: aGlobal.
+	[objects notEmpty] whileTrue: [
+		self addObject: objects removeLast.
+	].
 	objectTableFile close.
 %
 category: 'other'
@@ -374,7 +368,7 @@ openAppend: aFilePath withHeader: aBlock
 	hasHeader := GsFile existsOnServer: aFilePath.
 	file := GsFile openAppendOnServer: aFilePath.
 	file isNil ifTrue: [self error: GsFile serverErrorString].
-	hasHeader ifFalse: [ aBlock value: file ].
+	hasHeader ifFalse: [aBlock value: file].
 
 	^file
 %
@@ -394,8 +388,8 @@ method: SqlExport
 try: tryBlock ensure: ensureBlock
 
 	| result |
-	Exception category: GemStoneError number: nil do: [ :ex :cat :num :args |
-		System addAllToStoneLog: 'In ensure got error number ' , num printString.
+	Exception category: GemStoneError number: nil do: [:ex :cat :num :args |
+		GsFile stdout nextPutAll: 'A: Error number ' , num printString; cr.
 		ensureBlock value.
 		^nil
 	].
@@ -403,15 +397,4 @@ try: tryBlock ensure: ensureBlock
 	result := tryBlock value.
 	ensureBlock value.
 	^result
-%
-category: 'other'
-method: SqlExport
-try: tryBlock on: exception do: catchBlock
-
-	Exception category: GemStoneError number: nil do: [ :ex :cat :num :args |
-		Exception category: GemStoneError number: nil do: [ :ex :cat :num :args | ^nil ].
-		System addAllToStoneLog: 'In try got error number ' , num printString.
-		^catchBlock value
-	].
-	^tryBlock value
 %

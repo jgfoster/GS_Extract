@@ -4,7 +4,8 @@ errorCount
 input SqlExport.gs
 output pop
 errorCount
+iferr 1 stk
+iferr 2 logout
 run
 SqlExport exportTo: 'tmp'.
 %
-stk
