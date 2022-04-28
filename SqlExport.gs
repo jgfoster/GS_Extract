@@ -73,16 +73,16 @@ method: SqlExport
 addObject: anObject
 
 	[
-		Exception category: GemStoneError number: 2115 do: [:ex :cat :num :args | 
+		Exception category: GemStoneError number: 2115 do: [:ex :cat :num :args |
 			GsFile stdout nextPutAll: 'Object ignored due to security error'; cr.
-			^self 
+			^self
 		].
 		anObject isSpecial ifTrue: [^self].
 		anObject isBehavior ifTrue: [^self].
 		(anObject isKindOf: methodClass) ifTrue: [^self].
 		(anObject isKindOf: AbstractCollisionBucket) ifTrue: [^self].
 	] value.
-	
+
 	(self haveSeen: anObject) ifTrue: [^self].
 
 	objectTableFile
@@ -99,12 +99,12 @@ method: SqlExport
 exportDictionaryElements: anObject
 
 	| file token |
-	
+
 	token := Object new.
 
 	self try: [
 		file := self openAppend: path, '/',anObject class name,'_elements.txt' withHeader: [:f |
-			f 
+			f
 				nextPutAll: 'OOP'; nextPut: Character tab;
 				nextPutAll: 'key'; nextPut: Character tab;
 				nextPutAll: 'value';
@@ -112,13 +112,13 @@ exportDictionaryElements: anObject
 		].
 		anObject keys do: [:eachKey |
 			| eachValue |
-			eachValue := self 
+			eachValue := self
 				from: anObject
 				at: eachKey
 				otherwise: token.
-			file 
+			file
 				nextPutAll: 'o_';
-				nextPutAll: anObject asOop printString; 
+				nextPutAll: anObject asOop printString;
 				nextPut: Character tab.
 			self exportObject: eachKey to: file.
 			file nextPut: Character tab.
@@ -202,7 +202,7 @@ category: 'other'
 method: SqlExport
 exportRemainder: anObject
 	| file |
-	
+
 	self try: [
 		file := self openAppend: path, '/', anObject class name,'.txt' withHeader: [:f |
 			f nextPutAll: 'OOP'.
@@ -214,7 +214,7 @@ exportRemainder: anObject
 			].
 			f cr.
 		].
-		file 
+		file
 			nextPutAll: 'o_';
 			nextPutAll: anObject asOop printString.
 		1 to: anObject class allInstVarNames size do: [:i |
@@ -236,13 +236,13 @@ exportSequenceableCollectionElements: anObject
 			f
 				nextPutAll: 'OOP'; nextPut: Character tab;
 				nextPutAll: 'index'; nextPut: Character tab;
-				nextPutAll: 'value'; 
+				nextPutAll: 'value';
 				cr.
 		].
 		1 to: anObject size do: [:i |
-			file 
+			file
 				nextPutAll: 'o_';
-				nextPutAll: anObject asOop printString; 
+				nextPutAll: anObject asOop printString;
 				nextPut: Character tab;
 				nextPutAll: i printString;
 				nextPut: Character tab;
@@ -259,23 +259,23 @@ exportStrings: anObject
 	| file |
 	self try: [
 		file := self openAppend: (path , '/' , anObject class name , '.txt') withHeader: [:f |
-			f 
+			f
 				nextPutAll: 'OOP';
 				nextPut: Character tab;
 				nextPutAll: 'Value';
 				cr.
 		].
 		file
-			nextPutAll: 'o_'; 
+			nextPutAll: 'o_';
 			nextPutAll: anObject asOop printString;
 			nextPut: Character tab;
 			yourself.
-		
+
 		anObject do: [:char |
 			| val |
 			val := char asciiValue.
 			val = 92 ifTrue: [
-				file 
+				file
 					nextPut: val;
 					nextPut: $\;
 					yourself.
@@ -298,7 +298,7 @@ exportStrings: anObject
 category: 'other'
 method: SqlExport
 from: aDict at: aKey otherwise: anObject
-	Exception category: GemStoneError number: nil do: [:ex :cat :num :args | 
+	Exception category: GemStoneError number: nil do: [:ex :cat :num :args |
 		GsFile stdout nextPutAll: 'Error ' , num printString , ': OOP(' , aDict asOop printString , ') at: ' , aKey printString; cr.
 		^anObject
 	].
@@ -330,7 +330,7 @@ haveSeen: anObject
 	visited at: byteIndex put: ((visited at: byteIndex) bitOr: (1 bitShift: bitIndex)).
 	counter := counter + 1.
 	counter \\ 10000 == 0 ifTrue: [
-		System addAllToStoneLog: 'Object count = ' , counter printString. 
+		System addAllToStoneLog: 'Object count = ' , counter printString.
 	].
 	^false
 %
@@ -347,9 +347,9 @@ initialize: aGlobal to: aPath with: aFileSystem
 	fileSystem := aFileSystem.
 	path := aPath.
 	path last == $/ ifTrue: [path := path copyFrom: 1 to: path size - 1].
-	visited := ByteArray new: 10000000.
+	visited := ByteArray new: 20000000.
 	objectTableFile := self openAppend: path, '/object_table.txt' withHeader: [:f |
-			f 
+			f
 				nextPutAll: 'OOP'; nextPut: Character tab;
 				nextPutAll: 'ClassName';
 				cr.
