@@ -150,6 +150,34 @@ exportObject: anObject
 %
 category: 'other'
 method: SqlExport
+exportDateTime: aDateTime to: aGsFile
+  "yyyy-mm-ddThh:mm:ss+zzzz"
+
+  | string offset offsetHours offsetMinutes |
+
+	Exception category: GemStoneError number: nil do: [:ex :cat :num :args |
+		aGsFile nextPutAll: 'dt_' , (string isNil ifTrue: [aDateTime printString] ifFalse: [string]).
+		^self
+	].
+
+  string := aDateTime asStringUsingFormat: #(3 2 1 $- 1 1 $: true true false true true).
+  string at: 11 put: $T.
+	offset := aDateTime _localOffset: aDateTime timeZone.
+  string := string copyFrom: 1 to: 19.
+  string add: (offset < 0
+    ifTrue: [$-]
+    ifFalse: [$+]).
+  offset := offset abs // 60.
+  offsetHours := offset // 60.
+  offsetMinutes := offset \\ 60.
+  offsetHours < 10 ifTrue: [string add: $0].
+  string addAll: offsetHours printString.
+  offsetMinutes < 10 ifTrue: [string add: $0].
+  string addAll: offsetMinutes printString.
+  aGsFile nextPutAll: string.
+%
+category: 'other'
+method: SqlExport
 exportObject: anObject to: aGsFile
 
 	Exception category: GemStoneError number: 2115 do: [:ex :cat :num :args |
@@ -160,7 +188,17 @@ exportObject: anObject to: aGsFile
 
 	aGsFile nextPut: Character tab.
 
-	(anObject isKindOf: Integer) ifTrue: [
+	(anObject isKindOf: DateTime) ifTrue: [
+		self exportDateTime: anObject to: aGsFile.
+		^self
+	].
+
+	(anObject isKindOf: Fraction) ifTrue: [
+		anObject asFloat printOn: aGsFile.
+		^self
+	].
+
+	(anObject isKindOf: Number) ifTrue: [
 		anObject printOn: aGsFile.
 		^self
 	].
@@ -299,7 +337,9 @@ category: 'other'
 method: SqlExport
 from: aDict at: aKey otherwise: anObject
 	Exception category: GemStoneError number: nil do: [:ex :cat :num :args |
-		GsFile stdout nextPutAll: 'Error ' , num printString , ': OOP(' , aDict asOop printString , ') at: ' , aKey printString; cr.
+		| string |
+		string := num == 2115 ifTrue: ['Hidden: '] ifFalse: ['Error ' , num printString , ': '].
+		GsFile stdout nextPutAll: string , aDict class name , '(' , aDict asOop printString , ') at: ' , aKey printString; cr.
 		^anObject
 	].
 	^aDict at: aKey
@@ -389,7 +429,7 @@ try: tryBlock ensure: ensureBlock
 
 	| result |
 	Exception category: GemStoneError number: nil do: [:ex :cat :num :args |
-		GsFile stdout nextPutAll: 'A: Error number ' , num printString; cr.
+		GsFile stdout nextPutAll: 'A: Error number ' , num printString; nextPutAll: args printString; cr.
 		ensureBlock value.
 		^nil
 	].

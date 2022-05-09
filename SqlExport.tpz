@@ -2,6 +2,7 @@ errorCount
 output push SqlExport.out only
 errorCount
 input SqlExport.gs
+errorCount
 output pop
 errorCount
 iferr 1 stk
