@@ -2,8 +2,9 @@
 expectvalue /Class
 doit
 Object subclass: 'SqlExport'
-  instVarNames: #( classes counter fileSystem methodClass
-                    objects objectTableFile path visited)
+  instVarNames: #( classes counter files fileSystem
+                    methodClass objects objectTableFile path
+                    visited)
   classVars: #()
   classInstVars: #()
   poolDictionaries:	Array new
@@ -98,38 +99,36 @@ category: 'other'
 method: SqlExport
 exportDictionaryElements: anObject
 
-	| file token |
-
+	| file stream token |
 	token := Object new.
-
-	self try: [
-		file := self openAppend: path, '/',anObject class name,'_elements.txt' withHeader: [:f |
-			f
-				nextPutAll: 'OOP'; nextPut: Character tab;
-				nextPutAll: 'key'; nextPut: Character tab;
-				nextPutAll: 'value';
-				cr.
+	file := self openAppend: path , '/' , anObject class name , '_elements.txt' withHeader: [:f |
+		f
+			nextPutAll: 'OOP'; nextPut: Character tab;
+			nextPutAll: 'key'; nextPut: Character tab;
+			nextPutAll: 'value';
+			cr.
+	].
+	stream := WriteStream on: String new.
+	anObject keys do: [:eachKey |
+		| eachValue |
+		eachValue := self
+			from: anObject
+			at: eachKey
+			otherwise: token.
+		stream
+			nextPutAll: 'o_';
+			nextPutAll: anObject asOop printString;
+			nextPut: Character tab.
+		self exportObject: eachKey to: stream.
+		stream nextPut: Character tab.
+		eachValue == token ifTrue: [
+			stream nextPutAll: '-1'
+		] ifFalse: [
+			self exportObject: eachValue to: stream.
 		].
-		anObject keys do: [:eachKey |
-			| eachValue |
-			eachValue := self
-				from: anObject
-				at: eachKey
-				otherwise: token.
-			file
-				nextPutAll: 'o_';
-				nextPutAll: anObject asOop printString;
-				nextPut: Character tab.
-			self exportObject: eachKey to: file.
-			file nextPut: Character tab.
-			eachValue == token ifTrue: [
-				file nextPutAll: '-1'
-			] ifFalse: [
-				self exportObject: eachValue to: file.
-			].
-			file cr.
-		].
-	] ensure: [file isNil ifFalse: [file close]].
+		stream cr.
+	].
+	file nextPutAll: stream contents.
 %
 category: 'other'
 method: SqlExport
@@ -178,160 +177,158 @@ exportDateTime: aDateTime to: aGsFile
 %
 category: 'other'
 method: SqlExport
-exportObject: anObject to: aGsFile
+exportObject: anObject to: aStream
 
 	Exception category: GemStoneError number: 2115 do: [:ex :cat :num :args |
 		"This happens only if there is an error in the code that follows."
-		aGsFile nextPutAll: 'hidden'.
+		aStream nextPutAll: 'hidden'.
 		^self
 	].
 
-	aGsFile nextPut: Character tab.
+	aStream nextPut: Character tab.
 
 	(anObject isKindOf: DateTime) ifTrue: [
-		self exportDateTime: anObject to: aGsFile.
+		self exportDateTime: anObject to: aStream.
 		^self
 	].
 
 	(anObject isKindOf: Fraction) ifTrue: [
-		anObject asFloat printOn: aGsFile.
+		anObject asFloat printOn: aStream.
 		^self
 	].
 
 	(anObject isKindOf: Number) ifTrue: [
-		anObject printOn: aGsFile.
+		anObject printOn: aStream.
 		^self
 	].
 
 	(anObject isKindOf: Character) ifTrue: [
-		aGsFile nextPutAll: 'c_'.
-		anObject printOn: aGsFile.
+		aStream nextPutAll: 'c_'.
+		anObject printOn: aStream.
 		^self
 	].
 
 	(anObject isKindOf: Boolean) ifTrue: [
-		anObject printOn: aGsFile.
+		anObject printOn: aStream.
 		^self
 	].
 
 	anObject isNil ifTrue: [
-		aGsFile nextPutAll: 'nil'.
+		aStream nextPutAll: 'nil'.
 		^self
 	].
 
 	objects add: anObject.
-	aGsFile nextPutAll: 'o_'.
-	anObject asOop printOn: aGsFile.
-	aGsFile nextPut: $:; nextPutAll: anObject class name.
+	aStream nextPutAll: 'o_'.
+	anObject asOop printOn: aStream.
+	aStream nextPut: $:; nextPutAll: anObject class name.
 	((anObject isKindOf: Collection) and: [(anObject isKindOf: String) not]) ifTrue: [
 		| classNames comma |
 		classNames := IdentitySet new.
 		anObject do: [:each | classNames add: each class name].
 		comma := ''.
-		aGsFile nextPut: $(.
+		aStream nextPut: $(.
 		classNames do: [:each |
-			aGsFile nextPutAll: comma; nextPutAll: each.
+			aStream nextPutAll: comma; nextPutAll: each.
 			comma := ','.
 		].
-		aGsFile nextPut: $).
+		aStream nextPut: $).
 	].
 %
 category: 'other'
 method: SqlExport
 exportRemainder: anObject
-	| file |
 
-	self try: [
-		file := self openAppend: path, '/', anObject class name,'.txt' withHeader: [:f |
-			f nextPutAll: 'OOP'.
-			anObject class allInstVarNames do: [:eachName |
-				f nextPut: Character tab; nextPutAll: eachName.
-			].
-			anObject class isIndexable ifTrue: [
-				f nextPut: Character tab; nextPutAll: '_size'.
-			].
-			f cr.
-		].
-		file
-			nextPutAll: 'o_';
-			nextPutAll: anObject asOop printString.
-		1 to: anObject class allInstVarNames size do: [:i |
-			self exportObject: (anObject instVarAt: i) to: file.
+	| file stream |
+	file := self openAppend: path , '/' , anObject class name , '.txt' withHeader: [:f |
+		f nextPutAll: 'OOP'.
+		anObject class allInstVarNames do: [:eachName |
+			f nextPut: Character tab; nextPutAll: eachName.
 		].
 		anObject class isIndexable ifTrue: [
-			file nextPut: Character tab; nextPutAll: anObject size printString.
+			f nextPut: Character tab; nextPutAll: '_size'.
 		].
-		file cr.
-	] ensure: [file isNil ifFalse: [file close]].
+		f cr.
+	].
+	stream := WriteStream on: String new.
+	stream
+		nextPutAll: 'o_';
+		nextPutAll: anObject asOop printString.
+	1 to: anObject class allInstVarNames size do: [:i |
+		self exportObject: (anObject instVarAt: i) to: stream.
+	].
+	anObject class isIndexable ifTrue: [
+		stream nextPut: Character tab; nextPutAll: anObject size printString.
+	].
+	stream cr.
+	file nextPutAll: stream contents.
 %
 category: 'other'
 method: SqlExport
 exportSequenceableCollectionElements: anObject
 
-	| file |
-	self try: [
-		file := self openAppend: path, '/',anObject class name,'_elements.txt' withHeader: [:f |
-			f
-				nextPutAll: 'OOP'; nextPut: Character tab;
-				nextPutAll: 'index'; nextPut: Character tab;
-				nextPutAll: 'value';
-				cr.
-		].
-		1 to: anObject size do: [:i |
-			file
-				nextPutAll: 'o_';
-				nextPutAll: anObject asOop printString;
-				nextPut: Character tab;
-				nextPutAll: i printString;
-				nextPut: Character tab;
-				yourself.
-			self exportObject: (anObject at: i) to: file.
-			file cr.
-		].
-	] ensure: [file isNil ifFalse: [file close]].
+	| file stream |
+	file := self openAppend: path , '/' , anObject class name , '_elements.txt' withHeader: [:f |
+		f
+			nextPutAll: 'OOP'; nextPut: Character tab;
+			nextPutAll: 'index'; nextPut: Character tab;
+			nextPutAll: 'value';
+			cr.
+	].
+	stream := WriteStream on: String new.
+	1 to: anObject size do: [:i |
+		stream
+			nextPutAll: 'o_';
+			nextPutAll: anObject asOop printString;
+			nextPut: Character tab;
+			nextPutAll: i printString;
+			nextPut: Character tab;
+			yourself.
+		self exportObject: (anObject at: i) to: stream.
+		stream cr.
+	].
+	file nextPutAll: stream contents.
 %
 category: 'other'
 method: SqlExport
 exportStrings: anObject
 
-	| file |
-	self try: [
-		file := self openAppend: (path , '/' , anObject class name , '.txt') withHeader: [:f |
-			f
-				nextPutAll: 'OOP';
-				nextPut: Character tab;
-				nextPutAll: 'Value';
-				cr.
-		].
-		file
-			nextPutAll: 'o_';
-			nextPutAll: anObject asOop printString;
+	| file stream |
+	file := self openAppend: (path , '/' , anObject class name , '.txt') withHeader: [:f |
+		f
+			nextPutAll: 'OOP';
 			nextPut: Character tab;
-			yourself.
+			nextPutAll: 'Value';
+			cr.
+	].
+	stream := WriteStream on: String new.
+	stream
+		nextPutAll: 'o_';
+		nextPutAll: anObject asOop printString;
+		nextPut: Character tab;
+		yourself.
 
-		anObject do: [:char |
+	anObject do: [:char |
+		char == $\ ifTrue: [
+			stream
+				nextPutAll: '\\';
+				yourself.
+		] ifFalse: [
 			| val |
 			val := char asciiValue.
-			val = 92 ifTrue: [
-				file
-					nextPut: val;
+			(val < 32 or: [val > 126]) ifTrue: [
+				stream
 					nextPut: $\;
+					nextPutAll: val printString;
+					nextPut: $;;
 					yourself.
 			] ifFalse: [
-				(val < 32 or: [val > 126]) ifTrue: [
-					file
-						nextPut: $\;
-						nextPutAll: val printString;
-						nextPut: $;;
-						yourself.
-				] ifFalse: [
-					file nextPut: val.
-				].
+				stream nextPut: char.
 			].
 		].
-		file cr.
-
-	] ensure: [file isNil ifFalse: [file close]].
+	].
+	stream cr.
+	file nextPutAll: stream contents.
 %
 category: 'other'
 method: SqlExport
@@ -370,7 +367,7 @@ haveSeen: anObject
 	visited at: byteIndex put: ((visited at: byteIndex) bitOr: (1 bitShift: bitIndex)).
 	counter := counter + 1.
 	counter \\ 10000 == 0 ifTrue: [
-		System addAllToStoneLog: 'Object count = ' , counter printString.
+		GsFile stdout nextPutAll: 'Object count = ' , counter printString; cr.
 	].
 	^false
 %
@@ -378,7 +375,7 @@ category: 'other'
 method: SqlExport
 initialize: aGlobal to: aPath with: aFileSystem
 
-	System addAllToStoneLog: 'oopHighWaterMark = ', System _oopHighWaterMark printString.
+	GsFile stdout nextPutAll: 'Max object count = ', (System _oopHighWaterMark // 4) printString; cr.
 	objects := OrderedCollection with: aGlobal.
 	methodClass := (Globals includesKey: #'GsNMethod')
 		ifTrue: [Globals at: #'GsNMethod']
@@ -388,6 +385,7 @@ initialize: aGlobal to: aPath with: aFileSystem
 	path := aPath.
 	path last == $/ ifTrue: [path := path copyFrom: 1 to: path size - 1].
 	visited := ByteArray new: 20000000.
+	files := Dictionary new.
 	objectTableFile := self openAppend: path, '/object_table.txt' withHeader: [:f |
 			f
 				nextPutAll: 'OOP'; nextPut: Character tab;
@@ -398,19 +396,22 @@ initialize: aGlobal to: aPath with: aFileSystem
 		self addObject: objects removeLast.
 	].
 	objectTableFile close.
+	files do: [:each | each close].
 %
 category: 'other'
 method: SqlExport
 openAppend: aFilePath withHeader: aBlock
 
-	| file hasHeader |
-
-	hasHeader := GsFile existsOnServer: aFilePath.
-	file := GsFile openAppendOnServer: aFilePath.
-	file isNil ifTrue: [self error: GsFile serverErrorString].
-	hasHeader ifFalse: [aBlock value: file].
-
-	^file
+	^files
+		at: aFilePath
+		ifAbsentPut: [
+			| file hasHeader |
+			hasHeader := GsFile existsOnServer: aFilePath.
+			file := GsFile openAppendOnServer: aFilePath.
+			file isNil ifTrue: [self error: GsFile serverErrorString].
+			hasHeader ifFalse: [aBlock value: file].
+			file
+		]
 %
 category: 'other'
 method: SqlExport

@@ -3,10 +3,10 @@ output push SqlExport.out only
 errorCount
 input SqlExport.gs
 errorCount
-output pop
-errorCount
 iferr 1 stk
 iferr 2 logout
 run
-SqlExport exportTo: 'tmp'.
+ProfMonitor monitorBlock: [SqlExport exportTo: 'tmp'].
 %
+output pop
+errorCount
