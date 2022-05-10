@@ -2,7 +2,7 @@
 expectvalue /Class
 doit
 Object subclass: 'SqlExport'
-  instVarNames: #( classes counter files fileSystem
+  instVarNames: #( classes counter debug files fileSystem
                     methodClass objects objectTableFile path
                     visited)
   classVars: #()
@@ -38,12 +38,18 @@ category: 'other'
 classmethod: SqlExport
 export: aGlobal to: aPath gsFile: anObject
 
+	^self export: aGlobal to: aPath with: anObject debug: false
+%
+category: 'other'
+classmethod: SqlExport
+export: aGlobal to: aPath gsFile: anObject debug: aBoolean
+
 	"
 	SqlExport exportTo: '/tmp/globals/'
 	"
 
 	self basicNew
-		initialize: aGlobal to: aPath with: anObject;
+		initialize: aGlobal to: aPath with: anObject debug: aBoolean;
 		yourself.
 
 	^true
@@ -56,7 +62,17 @@ exportTo: aPath
 	SqlExport exportTo: '/tmp/globals/'
 	"
 
-	^self export: UserGlobals to: aPath gsFile: GsFile
+	^self export: UserGlobals to: aPath gsFile: GsFile debug: false
+%
+category: 'other'
+classmethod: SqlExport
+exportTo: aPath debug: aBoolean
+
+	"
+	SqlExport exportTo: '/tmp/globals/'
+	"
+
+	^self export: UserGlobals to: aPath gsFile: GsFile debug: aBoolean
 %
 category: 'other'
 classmethod: SqlExport
@@ -140,9 +156,11 @@ exportObject: anObject
 	].
 	(anObject class inheritsFrom: SequenceableCollection) ifTrue: [
 		self exportSequenceableCollectionElements: anObject.
+		(Globals includesKey: anObject class name) ifTrue: [^self].
 	].
 	(anObject class inheritsFrom: AbstractDictionary) ifTrue: [
 		self exportDictionaryElements: anObject.
+		(Globals includesKey: anObject class name) ifTrue: [^self].
 	].
 
 	self exportRemainder: anObject.
@@ -214,26 +232,28 @@ exportObject: anObject to: aStream
 	].
 
 	anObject isNil ifTrue: [
-		aStream nextPutAll: 'nil'.
+		aStream nextPutAll: 'null'.
 		^self
 	].
 
 	objects add: anObject.
 	aStream nextPutAll: 'o_'.
 	anObject asOop printOn: aStream.
-	aStream nextPut: $:; nextPutAll: anObject class name.
-	((anObject isKindOf: Collection) and: [(anObject isKindOf: String) not]) ifTrue: [
-		| classNames comma |
-		classNames := IdentitySet new.
-		anObject do: [:each | classNames add: each class name].
-		comma := ''.
-		aStream nextPut: $(.
-		classNames do: [:each |
-			aStream nextPutAll: comma; nextPutAll: each.
-			comma := ','.
+	debug ifTrue: [
+		aStream nextPut: $:; nextPutAll: anObject class name.
+		((anObject isKindOf: Collection) and: [(anObject isKindOf: String) not]) ifTrue: [
+			| classNames comma |
+			classNames := IdentitySet new.
+			anObject do: [:each | classNames add: each class name].
+			comma := ''.
+			aStream nextPut: $(.
+			classNames do: [:each |
+				aStream nextPutAll: comma; nextPutAll: each.
+				comma := ','.
+			].
+			aStream nextPut: $).
 		].
-		aStream nextPut: $).
-	].
+	]
 %
 category: 'other'
 method: SqlExport
@@ -373,9 +393,10 @@ haveSeen: anObject
 %
 category: 'other'
 method: SqlExport
-initialize: aGlobal to: aPath with: aFileSystem
+initialize: aGlobal to: aPath with: aFileSystem debug: aBoolean
 
 	GsFile stdout nextPutAll: 'Max object count = ', (System _oopHighWaterMark // 4) printString; cr.
+	debug := aBoolean.
 	objects := OrderedCollection with: aGlobal.
 	methodClass := (Globals includesKey: #'GsNMethod')
 		ifTrue: [Globals at: #'GsNMethod']
