@@ -205,18 +205,14 @@ exportObject: anObject to: aStream
 
 	aStream nextPut: Character tab.
 
+	anObject == nil   ifTrue: [aStream nextPutAll: 'null'.  ^self].
+	anObject == true  ifTrue: [aStream nextPutAll: 'true'.  ^self].
+	anObject == false ifTrue: [aStream nextPutAll: 'false'. ^self].
+
+	(anObject isKindOf: Number) ifTrue: [anObject printOn: aStream.	^self].
+
 	(anObject isKindOf: DateTime) ifTrue: [
 		self exportDateTime: anObject to: aStream.
-		^self
-	].
-
-	(anObject isKindOf: Fraction) ifTrue: [
-		anObject asFloat printOn: aStream.
-		^self
-	].
-
-	(anObject isKindOf: Number) ifTrue: [
-		anObject printOn: aStream.
 		^self
 	].
 
@@ -226,13 +222,8 @@ exportObject: anObject to: aStream
 		^self
 	].
 
-	(anObject isKindOf: Boolean) ifTrue: [
-		anObject printOn: aStream.
-		^self
-	].
-
-	anObject isNil ifTrue: [
-		aStream nextPutAll: 'null'.
+	(anObject isKindOf: Fraction) ifTrue: [
+		anObject asFloat printOn: aStream.
 		^self
 	].
 
@@ -328,7 +319,9 @@ exportStrings: anObject
 		nextPut: Character tab;
 		yourself.
 
-	anObject do: [:char |
+	1 to: anObject size do: [:i |
+		| char |
+		char := anObject at: i.
 		char == $\ ifTrue: [
 			stream
 				nextPutAll: '\\';
@@ -365,7 +358,7 @@ category: 'other'
 method: SqlExport
 haveSeen: anObject
 
-	| bitIndex byteIndex flag mod offset oop |
+	| bitIndex byte byteIndex flag mod offset oop |
 	SmallInteger maximumValue == 16r1FFFFFFF ifTrue: [
 		mod := 4.
 		offset := 0.
@@ -380,11 +373,12 @@ haveSeen: anObject
 	bitIndex := oop - 1 // mod.
 	byteIndex := bitIndex // 8.
 	bitIndex := bitIndex \\ 8.
-	flag := (visited at: byteIndex) bitAt: bitIndex + offset.
+	byte := visited at: byteIndex.
+	flag := byte bitAt: bitIndex + offset.
 	flag == 1 ifTrue: [
 		^true
 	].
-	visited at: byteIndex put: ((visited at: byteIndex) bitOr: (1 bitShift: bitIndex)).
+	visited at: byteIndex put: (byte bitOr: (1 bitShift: bitIndex)).
 	counter := counter + 1.
 	counter \\ 10000 == 0 ifTrue: [
 		GsFile stdout nextPutAll: 'Object count = ' , counter printString; cr.
