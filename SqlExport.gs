@@ -150,10 +150,6 @@ category: 'other'
 method: SqlExport
 exportObject: anObject
 
-	(anObject class inheritsFrom: CharacterCollection) ifTrue: [
-		self exportStrings: anObject.
-		^self
-	].
 	(anObject class inheritsFrom: SequenceableCollection) ifTrue: [
 		self exportSequenceableCollectionElements: anObject.
 		(Globals includesKey: anObject class name) ifTrue: [^self].
@@ -164,6 +160,17 @@ exportObject: anObject
 	].
 
 	self exportRemainder: anObject.
+%
+category: 'other'
+method: SqlExport
+exportDate: aDate to: aGsFile
+  "yyyy-mm-dd"
+
+	Exception category: GemStoneError number: nil do: [:ex :cat :num :args |
+		aGsFile nextPutAll: 'd_' , aDate printString.
+		^self
+	].
+	aGsFile nextPutAll: (aDate asStringUsingFormat: #(3 2 1 $- 1 1)).
 %
 category: 'other'
 method: SqlExport
@@ -213,6 +220,16 @@ exportObject: anObject to: aStream
 
 	(anObject isKindOf: DateTime) ifTrue: [
 		self exportDateTime: anObject to: aStream.
+		^self
+	].
+
+	(anObject isKindOf: Date) ifTrue: [
+		self exportDate: anObject to: aStream.
+		^self
+	].
+
+	(anObject class inheritsFrom: CharacterCollection) ifTrue: [
+		self exportString: anObject to: aStream.
 		^self
 	].
 
@@ -302,46 +319,30 @@ exportSequenceableCollectionElements: anObject
 %
 category: 'other'
 method: SqlExport
-exportStrings: anObject
+exportString: anObject to: aStream
 
-	| file stream |
-	file := self openAppend: (path , '/' , anObject class name , '.txt') withHeader: [:f |
-		f
-			nextPutAll: 'OOP';
-			nextPut: Character tab;
-			nextPutAll: 'Value';
-			cr.
-	].
-	stream := WriteStream on: String new.
-	stream
-		nextPutAll: 'o_';
-		nextPutAll: anObject asOop printString;
-		nextPut: Character tab;
-		yourself.
-
+	aStream nextPutAll: 's_'.
 	1 to: anObject size do: [:i |
 		| char |
 		char := anObject at: i.
 		char == $\ ifTrue: [
-			stream
+			aStream
 				nextPutAll: '\\';
 				yourself.
 		] ifFalse: [
 			| val |
 			val := char asciiValue.
 			(val < 32 or: [val > 126]) ifTrue: [
-				stream
+				aStream
 					nextPut: $\;
 					nextPutAll: val printString;
 					nextPut: $;;
 					yourself.
 			] ifFalse: [
-				stream nextPut: char.
+				aStream nextPut: char.
 			].
 		].
 	].
-	stream cr.
-	file nextPutAll: stream contents.
 %
 category: 'other'
 method: SqlExport
