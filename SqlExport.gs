@@ -152,7 +152,10 @@ exportObject: anObject
 
 	(anObject class inheritsFrom: SequenceableCollection) ifTrue: [
 		self exportSequenceableCollectionElements: anObject.
+		"For built-in collections we assume that the instance variables are private"
 		(Globals includesKey: anObject class name) ifTrue: [^self].
+		"If there are no instance variables, then no need to export object"
+		anObject class allInstVarNames size == 0 ifTrue: [^self].
 	].
 	(anObject class inheritsFrom: AbstractDictionary) ifTrue: [
 		self exportDictionaryElements: anObject.
@@ -241,6 +244,11 @@ exportObject: anObject to: aStream
 
 	(anObject isKindOf: Fraction) ifTrue: [
 		anObject asFloat printOn: aStream.
+		^self
+	].
+
+	(anObject isKindOf: Time) ifTrue: [
+		anObject printOn: aStream.
 		^self
 	].
 
