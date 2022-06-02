@@ -2,9 +2,9 @@
 expectvalue /Class
 doit
 Object subclass: 'SqlExport'
-  instVarNames: #( classes counter debug
+  instVarNames: #( counter debug
                     files fileSystem methodClass objects
-                    objectTableFile path queue visited)
+                    path queue visited)
   classVars: #()
   classInstVars: #()
   poolDictionaries:	Array new
@@ -87,41 +87,30 @@ exportTo: aPath gsFile: anObject
 ! ------------------- Instance methods for SqlExport
 category: 'other'
 method: SqlExport
-addObject: anObject
+addObject: anObject toObjectTable: aFile
 
 	| set |
 	(self shouldIgnore: anObject) ifTrue: [^self].
-	set := objects at: anObject ifAbsentPut: [IdentitySet new].
+	set := objects at: anObject class name ifAbsentPut: [IdentitySet new].
 	(set includes: anObject) ifTrue: [^self].
 	set add: anObject.
-
-	self exportObject: anObject.
-%
-category: 'other'
-method: SqlExport
-addObject1: anObject
-
-	[
-		Exception category: GemStoneError number: 2115 do: [:ex :cat :num :args |
-			GsFile stdout nextPutAll: 'Object ignored due to security error'; cr.
-			^self
-		].
-		anObject isSpecial ifTrue: [^self].
-		anObject isBehavior ifTrue: [^self].
-		(anObject isKindOf: methodClass) ifTrue: [^self].
-		(anObject isKindOf: AbstractCollisionBucket) ifTrue: [^self].
-	] value.
-
-	(self haveSeen: anObject) ifTrue: [^self].
-
-	objectTableFile
+	aFile
 		nextPutAll: 'o_';
 		nextPutAll: anObject asOop printString;
 		nextPut: Character tab;
 		nextPutAll: anObject class name;
 		cr.
-
-	self exportObject: anObject.
+	"Enqueue named instance variables"
+	1 to: anObject class allInstVarNames size do: [:i |
+		queue add: (anObject instVarAt: i).
+	].
+	"Enqueue numbered instance variables"
+	(anObject class inheritsFrom: Collection) ifTrue: [
+		queue addAll: anObject asIdentitySet.
+		(anObject class inheritsFrom: AbstractDictionary) ifTrue: [
+			queue addAll: anObject keys.
+		].
+	].
 %
 category: 'other'
 method: SqlExport
@@ -264,7 +253,6 @@ exportObject: anObject to: aStream
 		^self
 	].
 
-	queue add: anObject.
 	aStream nextPutAll: 'o_'.
 	anObject asOop printOn: aStream.
 	debug ifTrue: [
@@ -282,6 +270,43 @@ exportObject: anObject to: aStream
 			aStream nextPut: $).
 		].
 	]
+%
+category: 'other'
+method: SqlExport
+exportObjects
+
+	GsFile stdoutServer nextPutAll: 'exportObjects - 1'; lf.
+	self waitForPhaseOneToBeDone.
+	GsFile stdoutServer nextPutAll: 'exportObjects - 2'; lf.
+	"Phase two: export objects"
+	[
+		GsFile stdoutServer nextPutAll: 'exportObjects - 3'; lf.
+		self exportOneSet.
+	] whileTrue: [].
+	GsFile stdoutServer nextPutAll: 'exportObjects - 4'; lf.
+%
+category: 'other'
+method: SqlExport
+exportOneSet
+	"Answer true if we did an export, false if no (unlocked) sets left"
+
+	self getDictionaryLock.
+	objects do: [:eachSet |
+		"Find an object set that isn't locked"
+		(System writeLock: eachSet ifDenied: [#'denied'] ifChanged: [#'changed']) ~~ #'denied' ifTrue: [
+			"Release the dictionary lock and update view"
+			System commit ifFalse: [self error: 'Commit failed!'].
+			eachSet do: [:each |
+				self exportObject: each.
+			].
+			self getDictionaryLock.
+			objects removeKey: (objects keyAtValue: eachSet).
+			"Release dictionary and object sets lock"
+			System commitAndReleaseLocks ifFalse: [self error: 'Commit failed!'].
+			^true
+		].
+	].
+	^false
 %
 category: 'other'
 method: SqlExport
@@ -377,40 +402,24 @@ from: aDict at: aKey otherwise: anObject
 %
 category: 'other'
 method: SqlExport
-haveSeen: anObject
+getDictionaryLock
 
-	| bitIndex byte byteIndex flag mod offset oop |
-	SmallInteger maximumValue == 16r1FFFFFFF ifTrue: [
-		mod := 4.
-		offset := 0.
-	] ifFalse: [
-		mod := 8.
-		offset := 1.
+	[(System writeLock: objects ifDenied: [#'denied'] ifChanged: [#'changed']) == #'denied'] whileTrue: [
+		(Delay forSeconds: 1) wait.
+		System abortTransaction.
 	].
-	oop := anObject asOop.
-	oop \\ mod == 1 ifFalse: [
-		self error: 'We don''t understand oops'.
-	].
-	bitIndex := oop - 1 // mod.
-	byteIndex := bitIndex // 8.
-	bitIndex := bitIndex \\ 8.
-	byte := visited at: byteIndex.
-	flag := byte bitAt: bitIndex + offset.
-	flag == 1 ifTrue: [
-		^true
-	].
-	visited at: byteIndex put: (byte bitOr: (1 bitShift: bitIndex)).
-	counter := counter + 1.
-	counter \\ 10000 == 0 ifTrue: [
-		GsFile stdout nextPutAll: 'Object count = ' , counter printString; cr.
-	].
-	^false
+	System commit ifFalse: [self error: 'Commit failed!'].
+	System addToCommitReleaseLocksSet: objects.
 %
 category: 'other'
 method: SqlExport
 initialize: aGlobal to: aPath with: aFileSystem debug: aBoolean
+	| objectTableFile |
 
+	GsFile stdoutServer nextPutAll: 'initialize:to:with:debug: - 1'; lf.
 	UserGlobals at: #'sqlExport' put: self.
+	System writeLock: self.
+	GsFile stdoutServer nextPutAll: 'initialize:to:with:debug: - 2'; lf.
 	counter := 0.
 	debug := aBoolean.
 	objects := SymbolDictionary new.
@@ -418,46 +427,32 @@ initialize: aGlobal to: aPath with: aFileSystem debug: aBoolean
 	methodClass := (Globals includesKey: #'GsNMethod')
 		ifTrue: [Globals at: #'GsNMethod']
 		ifFalse: [Globals at: #'GsMethod'].
+	files := Dictionary new.
 	fileSystem := aFileSystem.
 	path := aPath.
 	path last == $/ ifTrue: [path := path copyFrom: 1 to: path size - 1].
-	visited := ByteArray new: 20000000.
-	files := Dictionary new.
 	System commitTransaction ifFalse: [self error: 'Commit failed!'].
-	[queue notEmpty] whileTrue: [
-		self addObject: queue removeLast.	"LIFO queue gives us depth-first traversal which should have fewer objects in the queue"
-		(counter := counter + 1) // 10000 == 0 ifTrue: [
-			System commitTransaction ifFalse: [self error: 'Commit failed!'].
-		].
-	].
-	System commitTransaction ifFalse: [self error: 'Commit failed!'].
-%
-category: 'other'
-method: SqlExport
-initialize1: aGlobal to: aPath with: aFileSystem debug: aBoolean
-
-	debug := aBoolean.
-	objects := OrderedCollection with: aGlobal.
-	methodClass := (Globals includesKey: #'GsNMethod')
-		ifTrue: [Globals at: #'GsNMethod']
-		ifFalse: [Globals at: #'GsMethod'].
-	counter := 0.
-	fileSystem := aFileSystem.
-	path := aPath.
-	path last == $/ ifTrue: [path := path copyFrom: 1 to: path size - 1].
-	visited := ByteArray new: 20000000.
-	files := Dictionary new.
+	GsFile stdoutServer nextPutAll: 'initialize:to:with:debug: - 3'; lf.
 	objectTableFile := self openAppend: path, '/object_table.txt' withHeader: [:f |
 		f
 			nextPutAll: 'OOP'; nextPut: Character tab;
 			nextPutAll: 'ClassName';
 			cr.
 	].
-	[objects notEmpty] whileTrue: [
-		self addObject: objects removeLast.
+	GsFile stdoutServer nextPutAll: 'initialize:to:with:debug: - 4'; lf.
+	[queue notEmpty] whileTrue: [
+		"LIFO queue gives us depth-first traversal which should have fewer objects in the queue"
+		self addObject: queue removeLast  toObjectTable: objectTableFile.
+		(counter := counter + 1) \\ 10000 == 0 ifTrue: [
+			System commitTransaction ifFalse: [self error: 'Commit failed!'].
+			GsFile stdoutServer nextPutAll: 'found object count: ' , counter printString; lf.
+		].
 	].
 	objectTableFile close.
-	files do: [:each | each close].
+	GsFile stdoutServer nextPutAll: 'initialize:to:with:debug: - 5'; lf.
+	System commitAndReleaseLocks ifFalse: [self error: 'Commit failed!'].
+	self exportObjects.
+	GsFile stdoutServer nextPutAll: 'initialize:to:with:debug: - 6'; lf.
 %
 category: 'other'
 method: SqlExport
@@ -473,17 +468,6 @@ openAppend: aFilePath withHeader: aBlock
 			hasHeader ifFalse: [aBlock value: file].
 			file
 		]
-%
-category: 'other'
-method: SqlExport
-path
-	^path
-%
-category: 'other'
-method: SqlExport
-path: aPath
-
-	path := aPath
 %
 category: 'other'
 method: SqlExport
@@ -513,4 +497,13 @@ try: tryBlock ensure: ensureBlock
 	result := tryBlock value.
 	ensureBlock value.
 	^result
+%
+category: 'other'
+method: SqlExport
+waitForPhaseOneToBeDone
+
+	[(System lockKind: self) == #'write'] whileTrue: [
+		(Delay forSeconds: 10) wait.
+		System abortTransaction.
+	].
 %
