@@ -106,9 +106,20 @@ addObject: anObject toObjectTable: aFile
 	].
 	"Enqueue numbered instance variables"
 	(anObject class inheritsFrom: Collection) ifTrue: [
-		queue addAll: anObject asIdentitySet.
 		(anObject class inheritsFrom: AbstractDictionary) ifTrue: [
-			queue addAll: anObject keys.
+			| token |
+			token := Object new.
+			anObject keys do: [:eachKey |
+				| eachValue |
+				eachValue := self
+					from: anObject
+					at: eachKey
+					otherwise: token.
+				queue add: eachKey.
+				eachValue ~~ token ifTrue: [queue add: eachValue].
+			].
+		] ifFalse: [
+			queue addAll: anObject asIdentitySet.
 		].
 	].
 %
@@ -275,15 +286,11 @@ category: 'other'
 method: SqlExport
 exportObjects
 
-	GsFile stdoutServer nextPutAll: 'exportObjects - 1'; lf.
 	self waitForPhaseOneToBeDone.
-	GsFile stdoutServer nextPutAll: 'exportObjects - 2'; lf.
 	"Phase two: export objects"
 	[
-		GsFile stdoutServer nextPutAll: 'exportObjects - 3'; lf.
 		self exportOneSet.
 	] whileTrue: [].
-	GsFile stdoutServer nextPutAll: 'exportObjects - 4'; lf.
 %
 category: 'other'
 method: SqlExport
@@ -414,12 +421,10 @@ getDictionaryLock
 category: 'other'
 method: SqlExport
 initialize: aGlobal to: aPath with: aFileSystem debug: aBoolean
-	| objectTableFile |
 
-	GsFile stdoutServer nextPutAll: 'initialize:to:with:debug: - 1'; lf.
+	| objectTableFile time maxLength |
 	UserGlobals at: #'sqlExport' put: self.
 	System writeLock: self.
-	GsFile stdoutServer nextPutAll: 'initialize:to:with:debug: - 2'; lf.
 	counter := 0.
 	debug := aBoolean.
 	objects := SymbolDictionary new.
@@ -432,27 +437,34 @@ initialize: aGlobal to: aPath with: aFileSystem debug: aBoolean
 	path := aPath.
 	path last == $/ ifTrue: [path := path copyFrom: 1 to: path size - 1].
 	System commitTransaction ifFalse: [self error: 'Commit failed!'].
-	GsFile stdoutServer nextPutAll: 'initialize:to:with:debug: - 3'; lf.
 	objectTableFile := self openAppend: path, '/object_table.txt' withHeader: [:f |
 		f
 			nextPutAll: 'OOP'; nextPut: Character tab;
 			nextPutAll: 'ClassName';
 			cr.
 	].
-	GsFile stdoutServer nextPutAll: 'initialize:to:with:debug: - 4'; lf.
-	[queue notEmpty] whileTrue: [
-		"LIFO queue gives us depth-first traversal which should have fewer objects in the queue"
-		self addObject: queue removeLast  toObjectTable: objectTableFile.
-		(counter := counter + 1) \\ 10000 == 0 ifTrue: [
-			System commitTransaction ifFalse: [self error: 'Commit failed!'].
-			GsFile stdoutServer nextPutAll: 'found object count: ' , counter printString; lf.
+	maxLength := 0.
+	time := Time millisecondsElapsedTime: [
+		[queue notEmpty] whileTrue: [
+			maxLength < queue size ifTrue: [maxLength := queue size].
+			"LIFO queue gives us depth-first traversal which should have fewer objects in the queue"
+			self addObject: queue removeLast toObjectTable: objectTableFile.
+			(counter := counter + 1) \\ 10000 == 0 ifTrue: [
+				System commitTransaction ifFalse: [self error: 'Commit failed!'].
+				counter \\ 100000 == 0 ifTrue: [
+					GsFile stdoutServer nextPutAll: 'found object count: ' , counter printString; lf.
+				].
+			].
 		].
 	].
 	objectTableFile close.
-	GsFile stdoutServer nextPutAll: 'initialize:to:with:debug: - 5'; lf.
+	GsFile stdoutServer nextPutAll: 'maximum queue length = ' , maxLength printString; lf.
+	GsFile stdoutServer nextPutAll: 'export phase one took ' , (time // 60) printString , ' seconds'; lf.
 	System commitAndReleaseLocks ifFalse: [self error: 'Commit failed!'].
-	self exportObjects.
-	GsFile stdoutServer nextPutAll: 'initialize:to:with:debug: - 6'; lf.
+	time := Time millisecondsElapsedTime: [
+		self exportObjects.
+	].
+	GsFile stdoutServer nextPutAll: 'export phase two took ' , (time // 60) printString , ' seconds'; lf.
 %
 category: 'other'
 method: SqlExport
