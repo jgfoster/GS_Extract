@@ -398,6 +398,7 @@ category: 'other'
 method: SqlExport
 initialize: aGlobal to: aPath with: aFileSystem debug: aBoolean
 
+	| time |
 	GsFile stdout nextPutAll: 'Max object count = ', (System _oopHighWaterMark // 4) printString; cr.
 	debug := aBoolean.
 	objects := OrderedCollection with: aGlobal.
@@ -416,11 +417,14 @@ initialize: aGlobal to: aPath with: aFileSystem debug: aBoolean
 				nextPutAll: 'ClassName';
 				cr.
 		].
-	[objects notEmpty] whileTrue: [
-		self addObject: objects removeLast.
+	time := Time millisecondsElapsedTime: [
+		[objects notEmpty] whileTrue: [
+			self addObject: objects removeLast.
+		].
 	].
 	objectTableFile close.
 	files do: [:each | each close].
+	GsFile stdout nextPutAll: 'Elapsed time = ' , (time // 60) printString , ' seconds'; cr.
 %
 category: 'other'
 method: SqlExport
