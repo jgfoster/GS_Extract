@@ -2,9 +2,9 @@
 expectvalue /Class
 doit
 Object subclass: 'SqlExport'
-  instVarNames: #( classes counter debug files fileSystem
-                    methodClass objects objectTableFile path
-                    visited)
+  instVarNames: #( classes counter debug
+                    files fileSystem methodClass objects
+                    objectTableFile path queue visited)
   classVars: #()
   classInstVars: #()
   poolDictionaries:	Array new
@@ -89,6 +89,18 @@ category: 'other'
 method: SqlExport
 addObject: anObject
 
+	| set |
+	(self shouldIgnore: anObject) ifTrue: [^self].
+	set := objects at: anObject ifAbsentPut: [IdentitySet new].
+	(set includes: anObject) ifTrue: [^self].
+	set add: anObject.
+
+	self exportObject: anObject.
+%
+category: 'other'
+method: SqlExport
+addObject1: anObject
+
 	[
 		Exception category: GemStoneError number: 2115 do: [:ex :cat :num :args |
 			GsFile stdout nextPutAll: 'Object ignored due to security error'; cr.
@@ -110,6 +122,45 @@ addObject: anObject
 		cr.
 
 	self exportObject: anObject.
+%
+category: 'other'
+method: SqlExport
+exportDate: aDate to: aGsFile
+  "yyyy-mm-dd"
+
+	Exception category: GemStoneError number: nil do: [:ex :cat :num :args |
+		aGsFile nextPutAll: 'd_' , aDate printString.
+		^self
+	].
+	aGsFile nextPutAll: (aDate asStringUsingFormat: #(3 2 1 $- 1 1)).
+%
+category: 'other'
+method: SqlExport
+exportDateTime: aDateTime to: aGsFile
+  "yyyy-mm-ddThh:mm:ss+zzzz"
+
+  | string offset offsetHours offsetMinutes |
+
+	Exception category: GemStoneError number: nil do: [:ex :cat :num :args |
+		aGsFile nextPutAll: 'dt_' , (string isNil ifTrue: [aDateTime printString] ifFalse: [string]).
+		^self
+	].
+
+  string := aDateTime asStringUsingFormat: #(3 2 1 $- 1 1 $: true true false true true).
+  string at: 11 put: $T.
+	offset := aDateTime _localOffset: aDateTime timeZone.
+  string := string copyFrom: 1 to: 19.
+  string add: (offset < 0
+    ifTrue: [$-]
+    ifFalse: [$+]).
+  offset := offset abs // 60.
+  offsetHours := offset // 60.
+  offsetMinutes := offset \\ 60.
+  offsetHours < 10 ifTrue: [string add: $0].
+  string addAll: offsetHours printString.
+  offsetMinutes < 10 ifTrue: [string add: $0].
+  string addAll: offsetMinutes printString.
+  aGsFile nextPutAll: string.
 %
 category: 'other'
 method: SqlExport
@@ -166,45 +217,6 @@ exportObject: anObject
 %
 category: 'other'
 method: SqlExport
-exportDate: aDate to: aGsFile
-  "yyyy-mm-dd"
-
-	Exception category: GemStoneError number: nil do: [:ex :cat :num :args |
-		aGsFile nextPutAll: 'd_' , aDate printString.
-		^self
-	].
-	aGsFile nextPutAll: (aDate asStringUsingFormat: #(3 2 1 $- 1 1)).
-%
-category: 'other'
-method: SqlExport
-exportDateTime: aDateTime to: aGsFile
-  "yyyy-mm-ddThh:mm:ss+zzzz"
-
-  | string offset offsetHours offsetMinutes |
-
-	Exception category: GemStoneError number: nil do: [:ex :cat :num :args |
-		aGsFile nextPutAll: 'dt_' , (string isNil ifTrue: [aDateTime printString] ifFalse: [string]).
-		^self
-	].
-
-  string := aDateTime asStringUsingFormat: #(3 2 1 $- 1 1 $: true true false true true).
-  string at: 11 put: $T.
-	offset := aDateTime _localOffset: aDateTime timeZone.
-  string := string copyFrom: 1 to: 19.
-  string add: (offset < 0
-    ifTrue: [$-]
-    ifFalse: [$+]).
-  offset := offset abs // 60.
-  offsetHours := offset // 60.
-  offsetMinutes := offset \\ 60.
-  offsetHours < 10 ifTrue: [string add: $0].
-  string addAll: offsetHours printString.
-  offsetMinutes < 10 ifTrue: [string add: $0].
-  string addAll: offsetMinutes printString.
-  aGsFile nextPutAll: string.
-%
-category: 'other'
-method: SqlExport
 exportObject: anObject to: aStream
 
 	Exception category: GemStoneError number: 2115 do: [:ex :cat :num :args |
@@ -252,7 +264,7 @@ exportObject: anObject to: aStream
 		^self
 	].
 
-	objects add: anObject.
+	queue add: anObject.
 	aStream nextPutAll: 'o_'.
 	anObject asOop printOn: aStream.
 	debug ifTrue: [
@@ -398,7 +410,32 @@ category: 'other'
 method: SqlExport
 initialize: aGlobal to: aPath with: aFileSystem debug: aBoolean
 
-	GsFile stdout nextPutAll: 'Max object count = ', (System _oopHighWaterMark // 4) printString; cr.
+	UserGlobals at: #'sqlExport' put: self.
+	counter := 0.
+	debug := aBoolean.
+	objects := SymbolDictionary new.
+	queue := OrderedCollection with: aGlobal.
+	methodClass := (Globals includesKey: #'GsNMethod')
+		ifTrue: [Globals at: #'GsNMethod']
+		ifFalse: [Globals at: #'GsMethod'].
+	fileSystem := aFileSystem.
+	path := aPath.
+	path last == $/ ifTrue: [path := path copyFrom: 1 to: path size - 1].
+	visited := ByteArray new: 20000000.
+	files := Dictionary new.
+	System commitTransaction ifFalse: [self error: 'Commit failed!'].
+	[queue notEmpty] whileTrue: [
+		self addObject: queue removeLast.	"LIFO queue gives us depth-first traversal which should have fewer objects in the queue"
+		(counter := counter + 1) // 10000 == 0 ifTrue: [
+			System commitTransaction ifFalse: [self error: 'Commit failed!'].
+		].
+	].
+	System commitTransaction ifFalse: [self error: 'Commit failed!'].
+%
+category: 'other'
+method: SqlExport
+initialize1: aGlobal to: aPath with: aFileSystem debug: aBoolean
+
 	debug := aBoolean.
 	objects := OrderedCollection with: aGlobal.
 	methodClass := (Globals includesKey: #'GsNMethod')
@@ -411,11 +448,11 @@ initialize: aGlobal to: aPath with: aFileSystem debug: aBoolean
 	visited := ByteArray new: 20000000.
 	files := Dictionary new.
 	objectTableFile := self openAppend: path, '/object_table.txt' withHeader: [:f |
-			f
-				nextPutAll: 'OOP'; nextPut: Character tab;
-				nextPutAll: 'ClassName';
-				cr.
-		].
+		f
+			nextPutAll: 'OOP'; nextPut: Character tab;
+			nextPutAll: 'ClassName';
+			cr.
+	].
 	[objects notEmpty] whileTrue: [
 		self addObject: objects removeLast.
 	].
@@ -447,6 +484,20 @@ method: SqlExport
 path: aPath
 
 	path := aPath
+%
+category: 'other'
+method: SqlExport
+shouldIgnore: anObject
+
+	Exception category: GemStoneError number: 2115 do: [:ex :cat :num :args |
+		GsFile stdout nextPutAll: 'Object ignored due to security error'; cr.
+		^true
+	].
+	anObject isSpecial ifTrue: [^true].
+	anObject isBehavior ifTrue: [^true].
+	(anObject isKindOf: methodClass) ifTrue: [^true].
+	(anObject isKindOf: AbstractCollisionBucket) ifTrue: [^true].
+	^false
 %
 category: 'other'
 method: SqlExport
