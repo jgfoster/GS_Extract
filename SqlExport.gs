@@ -330,6 +330,10 @@ method: SqlExport
 exportString: anObject to: aStream
 
 	aStream nextPutAll: 's_'.
+	(self shouldEncodeString: anObject) ifFalse: [
+		aStream nextPutAll: anObject.
+		^self
+	].
 	1 to: anObject size do: [:i |
 		| char |
 		char := anObject at: i.
@@ -451,6 +455,18 @@ method: SqlExport
 path: aPath
 
 	path := aPath
+%
+category: 'other'
+method: SqlExport
+shouldEncodeString: aString
+
+	1 to: aString size do: [:i |
+		| char codePoint |
+		char := aString at: i.
+		(char == $\ or: [codePoint := char asciiValue. codePoint < 32 or: [codePoint > 127]])
+			ifTrue: [^true].
+	].
+	^false
 %
 category: 'other'
 method: SqlExport
