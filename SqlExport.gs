@@ -134,9 +134,8 @@ exportDictionaryElements: anObject
 		stream
 			nextPutAll: 'o_';
 			nextPutAll: anObject asOop printString;
-			nextPut: Character tab.
+			yourself.
 		self exportObject: eachKey to: stream.
-		stream nextPut: Character tab.
 		eachValue == token ifTrue: [
 			stream nextPutAll: '-1'
 		] ifFalse: [
@@ -318,7 +317,6 @@ exportSequenceableCollectionElements: anObject
 			nextPutAll: anObject asOop printString;
 			nextPut: Character tab;
 			nextPutAll: i printString;
-			nextPut: Character tab;
 			yourself.
 		self exportObject: (anObject at: i) to: stream.
 		stream cr.
@@ -329,7 +327,7 @@ category: 'other'
 method: SqlExport
 exportString: anObject to: aStream
 
-	aStream nextPutAll: 's_'.
+	"aStream nextPutAll: 's_'."
 	(self shouldEncodeString: anObject) ifFalse: [
 		aStream nextPutAll: anObject.
 		^self
@@ -428,7 +426,7 @@ initialize: aGlobal to: aPath with: aFileSystem debug: aBoolean
 	].
 	objectTableFile close.
 	files do: [:each | each close].
-	GsFile stdout nextPutAll: 'Elapsed time = ' , (time // 60) printString , ' seconds'; cr.
+	GsFile stdout nextPutAll: 'Elapsed time = ' , (time // 1000) printString , ' seconds'; cr.
 %
 category: 'other'
 method: SqlExport
