@@ -339,6 +339,10 @@ exportString: anObject to: aStream
 			aStream
 				nextPutAll: '\\';
 				yourself.
+		char == $" ifTrue: [
+			aStream
+				nextPutAll: '\"';
+				yourself.
 		] ifFalse: [
 			| val |
 			val := char asciiValue.
@@ -351,7 +355,7 @@ exportString: anObject to: aStream
 			] ifFalse: [
 				aStream nextPut: char.
 			].
-		].
+		]].
 	].
 %
 category: 'other'
@@ -461,7 +465,8 @@ shouldEncodeString: aString
 	1 to: aString size do: [:i |
 		| char codePoint |
 		char := aString at: i.
-		(char == $\ or: [codePoint := char asciiValue. codePoint < 32 or: [codePoint > 127]])
+		codePoint := char asciiValue.
+		(char == $\ or: [char == $" or: [codePoint < 32 or: [codePoint > 127]]])
 			ifTrue: [^true].
 	].
 	^false
