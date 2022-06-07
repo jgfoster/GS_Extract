@@ -214,7 +214,7 @@ exportObject: anObject to: aStream
 
 	aStream nextPut: Character tab.
 
-	anObject == nil   ifTrue: [aStream nextPutAll: 'null'.  ^self].
+	anObject == nil   ifTrue: [^self].
 	anObject == true  ifTrue: [aStream nextPutAll: 'true'.  ^self].
 	anObject == false ifTrue: [aStream nextPutAll: 'false'. ^self].
 
