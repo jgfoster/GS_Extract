@@ -339,23 +339,25 @@ exportString: anObject to: aStream
 			aStream
 				nextPutAll: '\\';
 				yourself.
-		char == $" ifTrue: [
-			aStream
-				nextPutAll: '\"';
-				yourself.
 		] ifFalse: [
-			| val |
-			val := char asciiValue.
-			(val < 32 or: [val > 126]) ifTrue: [
+			char == $" ifTrue: [
 				aStream
-					nextPut: $\;
-					nextPutAll: val printString;
-					nextPut: $;;
+					nextPutAll: '\"';
 					yourself.
 			] ifFalse: [
-				aStream nextPut: char.
+				| val |
+				val := char asciiValue.
+				(val < 32 or: [val > 126]) ifTrue: [
+					aStream
+						nextPut: $\;
+						nextPutAll: val printString;
+						nextPut: $;;
+						yourself.
+				] ifFalse: [
+					aStream nextPut: char.
+				].
 			].
-		]].
+		].
 	].
 %
 category: 'other'
