@@ -342,7 +342,7 @@ exportString: anObject to: aStream
 		] ifFalse: [
 			char == $" ifTrue: [
 				aStream
-					nextPutAll: '\"';
+					nextPut: $";
 					yourself.
 			] ifFalse: [
 				| val |
